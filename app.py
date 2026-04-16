@@ -116,8 +116,15 @@ def draw():
         # 치수 라벨 교체 지시 생성
         changes_instruction = ""
         if changes:
-            changes_list = ', '.join([f'"{c["original"]}" → "{c["new"]}"' for c in changes])
-            changes_instruction = f"\n\n[중요] 반드시 다음 치수 라벨을 새 값으로 바꿔서 그려야 합니다: {changes_list}\n원본 값을 그대로 사용하면 안 됩니다."
+            changes_list = '\n'.join([f'  - "{c["original"]}" → "{c["new"]}"' for c in changes])
+            changes_instruction = f"""
+
+[필수 치수 교체 - 반드시 적용]
+다음 값들을 코드에서 반드시 새 값으로 바꿔야 합니다:
+{changes_list}
+
+예: width=3 이면 width=4로, height=2+np.sqrt(7) 이면 height=3+np.sqrt(5)로 변경.
+원본 값을 절대 사용하지 마세요."""
 
         # Claude API 호출
         client = anthropic.Anthropic(api_key=api_key)
@@ -147,7 +154,7 @@ def draw():
                     },
                     {
                         "type": "text",
-                        "text": f"이 수학 도형을 matplotlib으로 정확히 재현하는 Python 코드를 생성해주세요.{changes_instruction}"
+                        "text": f"이 수학 도형을 matplotlib으로 재현하는 Python 코드를 생성해주세요.{changes_instruction}"
                     }
                 ]
             }]
