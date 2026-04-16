@@ -182,6 +182,67 @@ def draw():
         print(f"[draw] Error: {traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/draw-tikz', methods=['POST'])
+def draw_tikz():
+    try:
+        data = request.json
+        tikz_code = data.get('tikz')
+        changes = data.get('changes', [])
+
+        api_key = os.environ.get('ANTHROPIC_API_KEY')
+        if not api_key:
+            return jsonify({'error': '서버에 ANTHROPIC_API_KEY 환경변수가 설정되지 않았습니다'}), 500
+
+        if not tikz_code:
+            return jsonify({'error': 'tikz is required'}), 400
+
+        # 치수 라벨 교체 지시 생성
+        changes_instruction = ""
+        if changes:
+            changes_list = '\n'.join([f'  - "{c["original"]}" → "{c["new"]}"' for c in changes])
+            changes_instruction = f"""
+
+[필수 치수 교체 - 반드시 적용]
+다음 값들을 코드에서 반드시 새 값으로 바꿔야 합니다:
+{changes_list}
+
+원본 값을 절대 사용하지 마세요."""
+
+        # Claude API 호출
+        client = anthropic.Anthropic(api_key=api_key)
+
+        message = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4000,
+            system=SYSTEM_PROMPT,
+            messages=[{
+                "role": "user",
+                "content": f"다음 TikZ 코드를 matplotlib Python 코드로 변환해줘.{changes_instruction}\n\nTikZ 코드:\n{tikz_code}"
+            }]
+        )
+
+        # 응답에서 코드 추출
+        response_text = message.content[0].text
+        code = extract_python_code(response_text)
+
+        print(f"[draw-tikz] Generated code:\n{code[:500]}...")
+
+        # 코드 실행하여 이미지 생성
+        result_base64 = execute_matplotlib_code(code)
+
+        return jsonify({
+            'success': True,
+            'image': result_base64,
+            'code': code
+        })
+
+    except anthropic.APIError as e:
+        print(f"[draw-tikz] Anthropic API error: {e}")
+        return jsonify({'error': f'API error: {str(e)}'}), 500
+    except Exception as e:
+        print(f"[draw-tikz] Error: {traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok'})
