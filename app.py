@@ -62,31 +62,28 @@ ax.axis('off')
 
 fig.tight_layout()
 fig  # 반환
-```"""
+```
+
+중요: 응답은 반드시 ```python 코드블록 하나만 출력하세요.
+코드블록 앞뒤에 설명, 분석, 주석을 절대 넣지 마세요.
+분석이 필요하면 코드 안에 주석(#)으로 넣으세요."""
 
 def extract_python_code(text):
-    """응답에서 Python 코드 추출 - Opus가 설명을 붙여도 코드만 추출"""
-    # ```python ... ``` 블록 찾기 (가장 먼저 매칭되는 것)
-    match = re.search(r'```python\s*([\s\S]*?)```', text)
-    if match:
-        code = match.group(1)
-        # 앞뒤 공백/빈줄 제거
-        return '\n'.join(line for line in code.strip().split('\n'))
-
-    # ```py ... ``` 블록 찾기
-    match = re.search(r'```py\s*([\s\S]*?)```', text)
-    if match:
-        code = match.group(1)
-        return '\n'.join(line for line in code.strip().split('\n'))
-
-    # ``` ... ``` 블록 찾기
-    match = re.search(r'```\s*([\s\S]*?)```', text)
-    if match:
-        code = match.group(1)
-        return '\n'.join(line for line in code.strip().split('\n'))
-
-    # 코드 블록 없으면 전체 텍스트 반환 (앞뒤 정리)
-    return text.strip()
+    """응답에서 Python 코드 추출 - 가장 긴 코드블록 선택"""
+    patterns = [
+        r'```python\s*([\s\S]*?)```',
+        r'```py\s*([\s\S]*?)```',
+        r'```\s*([\s\S]*?)```',
+    ]
+    for pattern in patterns:
+        matches = re.findall(pattern, text)
+        if matches:
+            longest = max(matches, key=len)
+            return longest.strip()
+    # 코드블록 없으면 ``` 라인 제거 후 반환
+    lines = text.strip().split('\n')
+    code_lines = [l for l in lines if not l.startswith('```')]
+    return '\n'.join(code_lines).strip()
 
 def execute_matplotlib_code(code):
     """matplotlib 코드 실행하고 PNG base64 반환"""
