@@ -65,16 +65,27 @@ fig  # 반환
 ```"""
 
 def extract_python_code(text):
-    """응답에서 Python 코드 추출"""
-    # ```python ... ``` 블록 찾기
+    """응답에서 Python 코드 추출 - Opus가 설명을 붙여도 코드만 추출"""
+    # ```python ... ``` 블록 찾기 (가장 먼저 매칭되는 것)
     match = re.search(r'```python\s*([\s\S]*?)```', text)
     if match:
-        return match.group(1).strip()
+        code = match.group(1)
+        # 앞뒤 공백/빈줄 제거
+        return '\n'.join(line for line in code.strip().split('\n'))
+
+    # ```py ... ``` 블록 찾기
+    match = re.search(r'```py\s*([\s\S]*?)```', text)
+    if match:
+        code = match.group(1)
+        return '\n'.join(line for line in code.strip().split('\n'))
+
     # ``` ... ``` 블록 찾기
     match = re.search(r'```\s*([\s\S]*?)```', text)
     if match:
-        return match.group(1).strip()
-    # 코드 블록 없으면 전체 텍스트 반환
+        code = match.group(1)
+        return '\n'.join(line for line in code.strip().split('\n'))
+
+    # 코드 블록 없으면 전체 텍스트 반환 (앞뒤 정리)
     return text.strip()
 
 def execute_matplotlib_code(code):
@@ -171,7 +182,7 @@ def draw():
         response_text = message.content[0].text
         code = extract_python_code(response_text)
 
-        print(f"[draw] Generated code:\n{code[:500]}...")
+        print(f"[draw] Generated code:\n{code}")
 
         # 코드 실행하여 이미지 생성
         result_base64 = execute_matplotlib_code(code)
@@ -187,7 +198,7 @@ def draw():
         return jsonify({'error': f'API error: {str(e)}'}), 500
     except Exception as e:
         print(f"[draw] Error: {traceback.format_exc()}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': str(e), 'code': code if 'code' in dir() else None}), 500
 
 @app.route('/draw-tikz', methods=['POST'])
 def draw_tikz():
@@ -232,7 +243,7 @@ def draw_tikz():
         response_text = message.content[0].text
         code = extract_python_code(response_text)
 
-        print(f"[draw-tikz] Generated code:\n{code[:500]}...")
+        print(f"[draw-tikz] Generated code:\n{code}")
 
         # 코드 실행하여 이미지 생성
         result_base64 = execute_matplotlib_code(code)
@@ -248,7 +259,7 @@ def draw_tikz():
         return jsonify({'error': f'API error: {str(e)}'}), 500
     except Exception as e:
         print(f"[draw-tikz] Error: {traceback.format_exc()}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': str(e), 'code': code if 'code' in dir() else None}), 500
 
 @app.route('/health', methods=['GET'])
 def health():
