@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import anthropic
+import os
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -95,18 +96,19 @@ def draw():
         data = request.json
         image_base64 = data.get('image')
         changes = data.get('changes', [])
-        api_key = data.get('anthropic_key')
+
+        api_key = os.environ.get('ANTHROPIC_API_KEY')
+        if not api_key:
+            return jsonify({'error': '서버에 ANTHROPIC_API_KEY 환경변수가 설정되지 않았습니다'}), 500
 
         if not image_base64:
             return jsonify({'error': 'image is required'}), 400
-        if not api_key:
-            return jsonify({'error': 'anthropic_key is required'}), 400
 
         # 치수 라벨 교체 지시 생성
         changes_instruction = ""
         if changes:
             changes_list = ', '.join([f'"{c["original"]}" → "{c["new"]}"' for c in changes])
-            changes_instruction = f"\n\n치수 라벨을 다음과 같이 교체해서 그려주세요: {changes_list}"
+            changes_instruction = f"\n\n[중요] 반드시 다음 치수 라벨을 새 값으로 바꿔서 그려야 합니다: {changes_list}\n원본 값을 그대로 사용하면 안 됩니다."
 
         # Claude API 호출
         client = anthropic.Anthropic(api_key=api_key)
