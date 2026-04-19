@@ -11,6 +11,7 @@ from io import BytesIO
 import base64
 import re
 import traceback
+import cv2
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type", "Authorization"])
@@ -257,6 +258,74 @@ def draw_tikz():
     except Exception as e:
         print(f"[draw-tikz] Error: {traceback.format_exc()}")
         return jsonify({'error': str(e), 'code': code if 'code' in dir() else None}), 500
+
+@app.route('/inpaint', methods=['POST'])
+def inpaint():
+    """OpenCV 인페인팅으로 라벨 영역의 텍스트 제거"""
+    try:
+        data = request.json
+        image_base64 = data.get('image')
+        media_type = data.get('mediaType', 'image/png')
+        labels = data.get('labels', [])
+        padding = data.get('padding', 0.02)
+
+        if not image_base64:
+            return jsonify({'error': 'image is required'}), 400
+
+        if not labels:
+            # 라벨 없으면 원본 그대로 반환
+            return jsonify({'success': True, 'image': image_base64})
+
+        # base64 디코딩
+        image_data = base64.b64decode(image_base64)
+        nparr = np.frombuffer(image_data, np.uint8)
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if image is None:
+            return jsonify({'error': '이미지 디코딩 실패'}), 400
+
+        h, w = image.shape[:2]
+        print(f"[inpaint] 이미지 크기: {w}x{h}, 라벨 수: {len(labels)}, padding: {padding}")
+
+        # 마스크 생성 (검은색 배경)
+        mask = np.zeros((h, w), dtype=np.uint8)
+
+        # 각 라벨 영역을 흰색으로 마스킹
+        for label in labels:
+            # 정규화 좌표를 픽셀 좌표로 변환
+            lx = label.get('x', 0)
+            ly = label.get('y', 0)
+            lw = label.get('w', 0)
+            lh = label.get('h', 0)
+
+            # 패딩 적용
+            x1 = int(max(0, (lx - padding) * w))
+            y1 = int(max(0, (ly - padding) * h))
+            x2 = int(min(w, (lx + lw + padding) * w))
+            y2 = int(min(h, (ly + lh + padding) * h))
+
+            print(f"[inpaint] 라벨 영역: ({x1}, {y1}) ~ ({x2}, {y2})")
+
+            # 마스크에 흰색 사각형 그리기
+            cv2.rectangle(mask, (x1, y1), (x2, y2), 255, -1)
+
+        # 인페인팅 실행
+        result = cv2.inpaint(image, mask, 3, cv2.INPAINT_TELEA)
+
+        # 결과를 PNG base64로 인코딩
+        _, buffer = cv2.imencode('.png', result)
+        result_base64 = base64.b64encode(buffer).decode('utf-8')
+
+        print(f"[inpaint] 인페인팅 완료, 결과 크기: {len(result_base64)} bytes")
+
+        return jsonify({
+            'success': True,
+            'image': result_base64
+        })
+
+    except Exception as e:
+        print(f"[inpaint] Error: {traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/health', methods=['GET'])
 def health():
